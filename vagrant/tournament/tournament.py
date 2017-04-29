@@ -5,38 +5,41 @@
 
 import psycopg2, bleach
 
-DBNAME = "tournament"
-
-def connect():
+def connect(database_name="tournament"):
     """Connect to the PostgreSQL database.  Returns a database connection."""
-    return psycopg2.connect("dbname=tournament")
-
+    try:
+        db = psycopg2.connect("dbname={}".format(database_name))
+        cursor = db.cursor()
+        return db, cursor
+    except:
+        print("Cannot connect to database tournament")
 
 def deleteMatches():
     """Remove all the match records from the database."""
-    db = psycopg2.connect(database=DBNAME)
-    c = db.cursor()
-    c.execute("delete from matches")
+    db, cursor = connect()
+    # faster than delete from
+    cursor.execute("TRUNCATE matches")
     db.commit()
     db.close()
 
 def deletePlayers():
     """Remove all the player records from the database."""
-    db = psycopg2.connect(database=DBNAME)
-    c = db.cursor()
-    c.execute("delete from players")
+    db, cursor = connect()
+    # faster than delete from
+    # DETAIL:  Table "matches" references "players".
+    # HINT:  Truncate table "matches" at the same time, or use TRUNCATE ... CASCADE.
+    cursor.execute("TRUNCATE players CASCADE")
     db.commit()
     db.close()
 
 
 def countPlayers():
     """Returns the number of players currently registered."""
-    db = psycopg2.connect(database=DBNAME)
-    c = db.cursor()
-    c.execute("select * from players")
-    players = c.fetchall()
+    db, cursor = connect()
+    cursor.execute("SELECT COUNT(*) FROM players")
+    playerCount = cursor.fetchall()[0][0]
     db.close()
-    return len(players)
+    return playerCount
 
 
 def registerPlayer(name):
@@ -48,9 +51,10 @@ def registerPlayer(name):
     Args:
       name: the player's full name (need not be unique).
     """
-    db = psycopg2.connect(database=DBNAME)
-    c = db.cursor()
-    c.execute("insert into players values (%s)", (bleach.clean(name),))
+    db, cursor = connect()
+    query = "INSERT INTO players (name) VALUES (%s);"
+    parameter = (bleach.clean(name),)
+    cursor.execute(query, parameter)
     db.commit()
     db.close()
 
@@ -67,10 +71,9 @@ def playerStandings():
         wins: the number of matches the player has won
         matches: the number of matches the player has played
     """
-    db = psycopg2.connect(database=DBNAME)
-    c = db.cursor()
-    c.execute("select * from playerstandings")
-    playerstandings = c.fetchall()
+    db, cursor = connect()
+    cursor.execute("SELECT * FROM playerstandings")
+    playerstandings = cursor.fetchall()
     db.close()
     return playerstandings
 
@@ -81,9 +84,10 @@ def reportMatch(winner, loser):
       winner:  the id number of the player who won
       loser:  the id number of the player who lost
     """
-    db = psycopg2.connect(database=DBNAME)
-    c = db.cursor()
-    c.execute("insert into matches values (%s,%s)", ((bleach.clean(winner),), (bleach.clean(loser),)))
+    db, cursor = connect()
+    query = "INSERT INTO matches (winner, loser) VALUES (%s, %s);"
+    parameter = ((bleach.clean(winner),), (bleach.clean(loser),))
+    cursor.execute(query, parameter)
     db.commit()
     db.close()
 
@@ -102,16 +106,13 @@ def swissPairings():
         id2: the second player's unique id
         name2: the second player's name
     """
-    db = psycopg2.connect(database=DBNAME)
-    c = db.cursor()
-    c.execute("select id, name from playerstandings")
-    idandnamepairs = c.fetchall()
-    db.close()
+    # reuse playerStandings() instead of connecting to database again
+    playerstandings = playerStandings()
     r = []
-    index = 0;
-    while index < len(idandnamepairs):
-        (id1, name1) = idandnamepairs[index]
-        (id2, name2) = idandnamepairs[index + 1]
+    index = 0
+    while index < len(playerstandings):
+        (id1, name1, wins1, matches1) = playerstandings[index]
+        (id2, name2, wins2, matches2) = playerstandings[index + 1]
         r.append((id1, name1, id2, name2))
         index += 2
     return r
