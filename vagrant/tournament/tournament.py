@@ -3,7 +3,7 @@
 # tournament.py -- implementation of a Swiss-system tournament
 #
 
-import psycopg2, bleach
+import psycopg2
 
 def connect(database_name="tournament"):
     """Connect to the PostgreSQL database.  Returns a database connection."""
@@ -53,7 +53,7 @@ def registerPlayer(name):
     """
     db, cursor = connect()
     query = "INSERT INTO players (name) VALUES (%s);"
-    parameter = (bleach.clean(name),)
+    parameter = (name,)
     cursor.execute(query, parameter)
     db.commit()
     db.close()
@@ -86,7 +86,7 @@ def reportMatch(winner, loser):
     """
     db, cursor = connect()
     query = "INSERT INTO matches (winner, loser) VALUES (%s, %s);"
-    parameter = ((bleach.clean(winner),), (bleach.clean(loser),))
+    parameter = (winner, loser,)
     cursor.execute(query, parameter)
     db.commit()
     db.close()
